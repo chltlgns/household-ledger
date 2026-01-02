@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}파일 업로드 - 가계부{% endblock %}
+
+{% block content %}
+<div class="upload-page">
+    <header class="page-header">
+        <h1>📂 명세서 업로드</h1>
+    </header>
+
+    <div class="card upload-card">
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">📄</div>
+            <h3>카드 명세서 파일을 드래그하거나 클릭하세요</h3>
+            <p>지원 형식: Excel (.xlsx, .xls), CSV (.csv)</p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
+        </div>
+
+        <div id="uploadProgress" class="upload-progress" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+            <p class="progress-text">업로드 중...</p>
+        </div>
+
+        <div id="uploadResult" class="upload-result" style="display: none;"></div>
+    </div>
+
+    <div class="card info-card">
+        <h3>💡 사용 방법</h3>
+        <ol>
+            <li>삼성카드 홈페이지에서 명세서를 Excel 파일로 다운로드합니다.</li>
+            <li>위 영역에 파일을 드래그하거나 클릭하여 업로드합니다.</li>
+            <li>자동으로 거래 내역이 추출되어 저장됩니다.</li>
+            <li>거래 내역 페이지에서 카테고리와 메모를 관리하세요.</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    const progress = document.getElementById('uploadProgress');
+    const result = document.getElementById('uploadResult');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) uploadFile(file);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) uploadFile(file);
+    });
+
+    async function uploadFile(file) {
+        progress.style.display = 'block';
+        result.style.display = 'none';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+
+            progress.style.display = 'none';
+            result.style.display = 'block';
+
+            if (res.ok) {
+                result.innerHTML = `
+                <div class="success">
+                    <span class="icon">✅</span>
+                    <p>${data.message}</p>
+                    <a href="/transactions" class="btn btn-primary">거래 내역 보기</a>
+                </div>
+            `;
+            } else {
+                result.innerHTML = `
+                <div class="error">
+                    <span class="icon">❌</span>
+                    <p>오류: ${data.error}</p>
+                </div>
+            `;
+            }
+        } catch (err) {
+            progress.style.display = 'none';
+            result.style.display = 'block';
+            result.innerHTML = `
+            <div class="error">
+                <span class="icon">❌</span>
+                <p>업로드 중 오류가 발생했습니다.</p>
+            </div>
+        `;
+        }
+    }
+</script>
+{% endblock %}

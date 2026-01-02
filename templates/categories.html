@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}카테고리 관리 - 가계부{% endblock %}
+
+{% block content %}
+<div class="categories-page">
+    <header class="page-header">
+        <h1>🏷️ 카테고리 관리</h1>
+    </header>
+
+    <!-- 카테고리 추가 -->
+    <div class="card">
+        <h2>새 카테고리 추가</h2>
+        <form id="addCategoryForm" class="add-form">
+            <input type="text" name="name" placeholder="새 카테고리 이름" required>
+            <input type="color" name="color" value="#6366f1">
+            <button type="submit" class="btn btn-primary">추가</button>
+        </form>
+    </div>
+
+    <!-- 카테고리 목록 -->
+    <div class="card">
+        <h2>카테고리 목록</h2>
+        <ul class="category-list" id="categoryList">
+            {% for cat in categories %}
+            <li class="category-item" data-id="{{ cat.id }}">
+                <span class="color-dot" style="background: {{ cat.color }}"></span>
+                <span class="category-name">{{ cat.name }}</span>
+                <div class="category-actions">
+                    <input type="color" class="color-picker" value="{{ cat.color }}" data-id="{{ cat.id }}">
+                    <button class="btn btn-icon btn-edit" data-id="{{ cat.id }}" title="수정">✏️</button>
+                    <button class="btn btn-icon btn-delete" data-id="{{ cat.id }}" title="삭제">🗑️</button>
+                </div>
+            </li>
+            {% else %}
+            <li class="empty-msg">카테고리가 없습니다</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <!-- 새로운 가맹점 (미분류) -->
+    <div class="card">
+        <h2>🆕 새로운 가맹점 <span class="count-badge">{{ uncategorized_merchants|length }}</span></h2>
+        <p class="help-text">아래 가맹점에 카테고리를 지정하면 해당 가맹점의 모든 거래에 자동 적용됩니다.</p>
+        {% if uncategorized_merchants %}
+        <ul class="merchant-list">
+            {% for m in uncategorized_merchants %}
+            <li class="merchant-item">
+                <div class="merchant-info">
+                    <span class="merchant-name">{{ m.merchant }}</span>
+                    <span class="merchant-meta">{{ m.business_type or '' }} · {{ m.tx_count }}건</span>
+                </div>
+                <select class="merchant-category-select" data-merchant="{{ m.merchant }}">
+                    <option value="">카테고리 선택...</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-msg">모든 가맹점이 분류되었습니다 ✓</p>
+        {% endif %}
+    </div>
+
+    <!-- 저장된 가맹점 규칙 -->
+    <div class="card">
+        <h2>✅ 저장된 가맹점 <span class="count-badge">{{ merchant_rules|length }}</span></h2>
+        <p class="help-text">카테고리가 지정된 가맹점입니다. 새로운 거래가 추가되면 자동으로 분류됩니다.</p>
+        {% if merchant_rules %}
+        <ul class="merchant-list saved-merchants">
+            {% for rule in merchant_rules %}
+            <li class="merchant-item">
+                <div class="merchant-info">
+                    <span class="merchant-name">{{ rule.merchant_pattern }}</span>
+                    <span class="category-badge" style="background: {{ rule.category_color }}">{{ rule.category_name
+                        }}</span>
+                </div>
+                <div class="merchant-actions">
+                    <select class="merchant-category-select saved" data-merchant="{{ rule.merchant_pattern }}">
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if cat.id==rule.category_id %}selected{% endif %}>{{ cat.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button class="btn btn-icon btn-remove-rule" data-merchant="{{ rule.merchant_pattern }}"
+                        title="규칙 제거">❌</button>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-msg">저장된 가맹점 규칙이 없습니다</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 카테고리 추가
+    document.getElementById('addCategoryForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        const res = await fetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: formData.get('name'),
+                color: formData.get('color')
+            })
+        });
+
+        if (res.ok) {
+            location.reload();
+        } else {
+            const data = await res.json();
+            showToast(data.error || '오류가 발생했습니다', 'error');
+        }
+    });
+
+    // 색상 변경
+    document.querySelectorAll('.color-picker').forEach(picker => {
+        picker.addEventListener('change', async (e) => {
+            const id = e.target.dataset.id;
+            await fetch(`/api/categories/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ color: e.target.value })
+            });
+            e.target.closest('.category-item').querySelector('.color-dot').style.background = e.target.value;
+            showToast('색상이 변경되었습니다');
+        });
+    });
+
+    // 카테고리 수정
+    document.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            const li = e.target.closest('li');
+            const nameSpan = li.querySelector('.category-name');
+            const currentName = nameSpan.textContent;
+
+            const newName = prompt('새 이름을 입력하세요:', currentName);
+            if (newName && newName !== currentName) {
+                await fetch(`/api/categories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                nameSpan.textContent = newName;
+                showToast('카테고리가 수정되었습니다');
+            }
+        });
+    });
+
+    // 카테고리 삭제
+    document.querySelectorAll('.category-list .btn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            if (!confirm('이 카테고리를 삭제하시겠습니까?\n해당 카테고리의 거래들은 미분류로 변경됩니다.')) return;
+
+            const id = e.target.dataset.id;
+            await fetch(`/api/categories/${id}`, { method: 'DELETE' });
+            e.target.closest('li').remove();
+            showToast('카테고리가 삭제되었습니다');
+        });
+    });
+
+    // 가맹점 카테고리 지정 (새로운 가맹점)
+    document.querySelectorAll('.merchant-category-select:not(.saved)').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const merchant = e.target.dataset.merchant;
+            const categoryId = e.target.value;
+
+            if (!categoryId) return;
+
+            const res = await fetch('/api/merchants/rule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant, category_id: parseInt(categoryId) })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                showToast(`${merchant}의 카테고리가 설정되었습니다 (${data.affected}건 적용)`);
+                location.reload();
+            } else {
+                const data = await res.json();
+                showToast(data.error || '오류가 발생했습니다', 'error');
+            }
+        });
+    });
+
+    // 저장된 가맹점 카테고리 변경
+    document.querySelectorAll('.merchant-category-select.saved').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const merchant = e.target.dataset.merchant;
+            const categoryId = e.target.value;
+
+            const res = await fetch('/api/merchants/rule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant, category_id: parseInt(categoryId) })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                showToast(`카테고리가 변경되었습니다 (${data.affected}건 적용)`);
+                location.reload();
+            }
+        });
+    });
+
+    // 가맹점 규칙 제거
+    document.querySelectorAll('.btn-remove-rule').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const merchant = e.target.dataset.merchant;
+            if (!confirm(`${merchant}의 분류 규칙을 제거하시겠습니까?`)) return;
+
+            await fetch('/api/merchants/rule', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant })
+            });
+
+            showToast('규칙이 제거되었습니다');
+            location.reload();
+        });
+    });
+</script>
+{% endblock %}

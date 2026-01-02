@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}대시보드 - 가계부{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <header class="page-header">
+        <h1>📊 대시보드</h1>
+        <form class="date-range-form" method="get" action="/">
+            <div class="date-range-group">
+                <label>시작</label>
+                <select name="start_year">
+                    {% for y in years %}
+                    <option value="{{ y }}" {{ 'selected' if y==start_year else '' }}>{{ y }}년</option>
+                    {% endfor %}
+                </select>
+                <select name="start_month">
+                    {% for m in range(1, 13) %}
+                    <option value="{{ m }}" {{ 'selected' if m==start_month else '' }}>{{ m }}월</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <span class="date-range-separator">~</span>
+            <div class="date-range-group">
+                <label>종료</label>
+                <select name="end_year">
+                    {% for y in years %}
+                    <option value="{{ y }}" {{ 'selected' if y==end_year else '' }}>{{ y }}년</option>
+                    {% endfor %}
+                </select>
+                <select name="end_month">
+                    {% for m in range(1, 13) %}
+                    <option value="{{ m }}" {{ 'selected' if m==end_month else '' }}>{{ m }}월</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">조회</button>
+        </form>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <h3>기간 내 총 지출</h3>
+            <p class="stat-value">₩{{ "{:,}".format(total) }}</p>
+            <p class="stat-period">{{ start_year }}.{{ start_month }} ~ {{ end_year }}.{{ end_month }}</p>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <section class="card chart-card">
+            <h2>카테고리별 지출</h2>
+            <div id="categoryChart"></div>
+        </section>
+
+        <section class="card">
+            <h2>최근 거래</h2>
+            <div class="tx-list">
+                {% for tx in recent_txs[:7] %}
+                <div class="tx-item">
+                    <div class="tx-info">
+                        <span class="tx-merchant">{{ tx.merchant }}</span>
+                        <span class="tx-date">{{ tx.date[:4] }}.{{ tx.date[4:6] }}.{{ tx.date[6:8] }}</span>
+                    </div>
+                    <div class="tx-amount {% if tx.billed_amount < 0 %}negative{% endif %}">₩{{
+                        "{:,}".format(tx.billed_amount) }}</div>
+                </div>
+                {% else %}
+                <p class="empty-msg">거래 내역이 없습니다. 명세서를 업로드해주세요.</p>
+                {% endfor %}
+            </div>
+            <a href="{{ url_for('transactions') }}" class="btn btn-link">전체 보기 →</a>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const summaryData = {{ summary | tojson }};
+
+    if (summaryData.length > 0) {
+        const labels = summaryData.map(s => s.name || '미분류');
+        const values = summaryData.map(s => s.total || 0);
+        const colors = summaryData.map(s => s.color || '#64748b');
+
+        Plotly.newPlot('categoryChart', [{
+            type: 'pie',
+            labels: labels,
+            values: values,
+            marker: { colors: colors },
+            textinfo: 'label+percent',
+            textposition: 'inside',
+            hole: 0.4
+        }], {
+            paper_bgcolor: 'transparent',
+            font: { color: '#e2e8f0', family: 'Pretendard, sans-serif' },
+            showlegend: true,
+            legend: { orientation: 'h', y: -0.1 },
+            margin: { t: 20, b: 40, l: 20, r: 20 }
+        }, { responsive: true });
+    } else {
+        document.getElementById('categoryChart').innerHTML = '<p class="empty-msg">데이터가 없습니다</p>';
+    }
+</script>
+{% endblock %}

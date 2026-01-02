@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}거래내역 - 가계부{% endblock %}
+
+{% block content %}
+<div class="transactions-page">
+    <header class="page-header">
+        <h1>📋 거래 내역</h1>
+        {% if current_year and current_month %}
+        <div class="tx-count-badge">{{ current_year }}년 {{ current_month }}월 거래: <strong>{{ transactions|length
+                }}건</strong></div>
+        {% else %}
+        <div class="tx-count-badge">전체 거래: <strong>{{ transactions|length }}건</strong></div>
+        {% endif %}
+    </header>
+
+    <div class="filters card">
+        <form method="GET" class="filter-form">
+            <select name="year" onchange="this.form.submit()">
+                <option value="">전체 연도</option>
+                {% for y in years %}
+                <option value="{{ y }}" {% if y==current_year %}selected{% endif %}>{{ y }}년</option>
+                {% endfor %}
+            </select>
+
+            <select name="month" onchange="this.form.submit()">
+                <option value="">전체 월</option>
+                {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if m==current_month %}selected{% endif %}>{{ m }}월</option>
+                {% endfor %}
+            </select>
+
+            <select name="category" onchange="this.form.submit()">
+                <option value="">전체 카테고리</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if cat.id==current_category %}selected{% endif %}>{{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <select name="tag" onchange="this.form.submit()">
+                <option value="">전체 태그</option>
+                {% for tag in tags %}
+                <option value="{{ tag.id }}" {% if tag.id==current_tag %}selected{% endif %}>#{{ tag.name }}</option>
+                {% endfor %}
+            </select>
+
+            <input type="text" name="search" placeholder="가맹점 검색..." value="{{ search }}" class="search-input">
+            <button type="submit" class="btn btn-primary">검색</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <table class="tx-table" id="txTable">
+            <thead>
+                <tr>
+                    <th class="sortable" data-sort="date">날짜 ⇅</th>
+                    <th class="sortable" data-sort="merchant">가맹점 ⇅</th>
+                    <th>업종</th>
+                    <th class="sortable" data-sort="amount">금액 ⇅</th>
+                    <th>카테고리</th>
+                    <th>메모</th>
+                    <th>태그</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                <tr data-id="{{ tx.id }}">
+                    <td class="date">{{ tx.date[:4] }}.{{ tx.date[4:6] }}.{{ tx.date[6:8] }}</td>
+                    <td class="merchant">
+                        {{ tx.merchant }}
+                        {% if tx.is_overseas %}<span class="badge overseas">해외</span>{% endif %}
+                    </td>
+                    <td class="business-type">{{ tx.business_type or '-' }}</td>
+                    <td class="amount">₩{{ "{:,}".format(tx.billed_amount) }}</td>
+                    <td class="category">
+                        <select class="category-select" data-tx-id="{{ tx.id }}" data-merchant="{{ tx.merchant }}">
+                            <option value="">미분류</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat.id }}" {% if cat.id==tx.category_id %}selected{% endif %}>{{ cat.name
+                                }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td class="memo">
+                        <input type="text" class="memo-input" data-tx-id="{{ tx.id }}" value="{{ tx.memo or '' }}"
+                            placeholder="메모 추가...">
+                    </td>
+                    <td class="tags">
+                        <div class="tag-list">
+                            {% for tag in tx.tags %}
+                            <span class="tag" style="background: {{ tag.color }}">
+                                #{{ tag.name }}
+                                <button class="tag-remove" data-tx-id="{{ tx.id }}"
+                                    data-tag-id="{{ tag.id }}">×</button>
+                            </span>
+                            {% endfor %}
+                            <input type="text" class="tag-input" data-tx-id="{{ tx.id }}" placeholder="+ 태그">
+                        </div>
+                    </td>
+                    <td class="actions">
+                        <button class="btn btn-icon btn-delete" data-tx-id="{{ tx.id }}" title="삭제">🗑️</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="empty-msg">거래 내역이 없습니다</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 카테고리 변경
+    document.querySelectorAll('.category-select').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const txId = e.target.dataset.txId;
+            const categoryId = e.target.value || null;
+            const merchant = e.target.dataset.merchant;
+
+            await fetch(`/api/transactions/${txId}/category`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    category_id: categoryId ? parseInt(categoryId) : null,
+                    merchant: merchant,
+                    save_rule: true
+                })
+            });
+            showToast('카테고리가 저장되었습니다');
+        });
+    });
+
+    // 메모 저장 (blur 시)
+    document.querySelectorAll('.memo-input').forEach(input => {
+        input.addEventListener('blur', async (e) => {
+            const txId = e.target.dataset.txId;
+            const content = e.target.value;
+
+            await fetch(`/api/transactions/${txId}/memo`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+        });
+    });
+
+    // 태그 추가
+    document.querySelectorAll('.tag-input').forEach(input => {
+        input.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const txId = e.target.dataset.txId;
+                const name = e.target.value.trim().replace(/^#/, '');
+
+                if (name) {
+                    const res = await fetch(`/api/transactions/${txId}/tags`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+
+                    if (res.ok) {
+                        location.reload();
+                    }
+                }
+            }
+        });
+    });
+
+    // 태그 삭제
+    document.querySelectorAll('.tag-remove').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const txId = e.target.dataset.txId;
+            const tagId = e.target.dataset.tagId;
+
+            await fetch(`/api/transactions/${txId}/tags`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tag_id: parseInt(tagId) })
+            });
+
+            e.target.parentElement.remove();
+        });
+    });
+
+    // 거래 삭제
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            if (!confirm('이 거래를 삭제하시겠습니까?')) return;
+
+            const txId = e.target.dataset.txId;
+            await fetch(`/api/transactions/${txId}`, { method: 'DELETE' });
+            e.target.closest('tr').remove();
+            showToast('거래가 삭제되었습니다');
+        });
+    });
+
+    // 테이블 정렬
+    let sortOrder = {};
+    document.querySelectorAll('.sortable').forEach(th => {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', () => {
+            const sortKey = th.dataset.sort;
+            const table = document.getElementById('txTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // 정렬 순서 토글
+            sortOrder[sortKey] = !sortOrder[sortKey];
+            const ascending = sortOrder[sortKey];
+
+            rows.sort((a, b) => {
+                let aVal, bVal;
+
+                if (sortKey === 'date') {
+                    aVal = a.querySelector('.date')?.textContent || '';
+                    bVal = b.querySelector('.date')?.textContent || '';
+                } else if (sortKey === 'merchant') {
+                    aVal = a.querySelector('.merchant')?.textContent?.trim() || '';
+                    bVal = b.querySelector('.merchant')?.textContent?.trim() || '';
+                } else if (sortKey === 'amount') {
+                    aVal = parseInt(a.querySelector('.amount')?.textContent?.replace(/[^\d]/g, '') || 0);
+                    bVal = parseInt(b.querySelector('.amount')?.textContent?.replace(/[^\d]/g, '') || 0);
+                    return ascending ? aVal - bVal : bVal - aVal;
+                }
+
+                return ascending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        });
+    });
+</script>
+{% endblock %}
