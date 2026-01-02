@@ -50,7 +50,7 @@ def detect_sheet_type(df, sheet_name=''):
         row_text = ' '.join([str(x) for x in df.iloc[i].tolist() if pd.notna(x)])
         if '해외이용' in row_text or '해외매출' in row_text:
             return 'overseas'
-        if '국내이용' in row_text or '국내매출' in row_text or '일시불' in row_text:
+        if '국내이용' in row_text or '국내매출' in row_text or '일시불' in row_text or '할부' in row_text:
             return 'domestic'
         if '청구요약' in row_text or '결제예정' in row_text:
             return 'summary'

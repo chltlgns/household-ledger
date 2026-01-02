@@ -7,6 +7,13 @@
     <title>{% block title %}가계부{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script>
+        // 페이지 로드 전 테마 적용 (깜빡임 방지)
+        (function () {
+            const theme = localStorage.getItem('theme') || 'navy';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     {% block head %}{% endblock %}
 </head>
 
@@ -28,6 +35,11 @@
         </ul>
         {% if current_user.is_authenticated %}
         <div class="user-menu">
+            <div class="theme-toggle">
+                <button class="theme-btn" data-theme="dark" title="다크 모드">🌙</button>
+                <button class="theme-btn" data-theme="white" title="화이트 모드">☀️</button>
+                <button class="theme-btn" data-theme="navy" title="네이비 모드">⭐</button>
+            </div>
             <span class="user-name">👤 {{ current_user.username }}</span>
             <a href="{{ url_for('logout') }}" class="btn btn-sm">로그아웃</a>
         </div>
@@ -41,6 +53,25 @@
     <div id="toast" class="toast"></div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // 테마 토글 기능
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const theme = btn.dataset.theme;
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                updateActiveThemeBtn();
+            });
+        });
+
+        function updateActiveThemeBtn() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'navy';
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === currentTheme);
+            });
+        }
+        updateActiveThemeBtn();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 

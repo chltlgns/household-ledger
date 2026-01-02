@@ -52,10 +52,27 @@
         </form>
     </div>
 
+    <!-- Bulk Action Bar -->
+    <div class="bulk-action-bar" id="bulkActionBar">
+        <span class="selected-count"><span id="selectedCount">0</span>건 선택됨</span>
+        <select id="bulkCategorySelect" class="bulk-category-select">
+            <option value="">카테고리 일괄 변경</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn" id="bulkCategoryBtn">카테고리 적용</button>
+        <button class="btn btn-danger" id="bulkDeleteBtn">선택 삭제</button>
+        <button class="btn" id="clearSelectionBtn">선택 해제</button>
+    </div>
+
     <div class="card">
         <table class="tx-table" id="txTable">
             <thead>
                 <tr>
+                    <th>
+                        <div class="row-checkbox select-all-checkbox" id="selectAllCheckbox"></div>
+                    </th>
                     <th class="sortable" data-sort="date">날짜 ⇅</th>
                     <th class="sortable" data-sort="merchant">가맹점 ⇅</th>
                     <th class="sortable" data-sort="amount">금액 ⇅</th>
@@ -68,6 +85,9 @@
             <tbody>
                 {% for tx in transactions %}
                 <tr data-id="{{ tx.id }}">
+                    <td>
+                        <div class="row-checkbox" data-tx-id="{{ tx.id }}"></div>
+                    </td>
                     <td class="date">{{ tx.date[:4] }}.{{ tx.date[4:6] }}.{{ tx.date[6:8] }}</td>
                     <td class="merchant">
                         {{ tx.merchant }}
@@ -106,7 +126,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="empty-msg">거래 내역이 없습니다</td>
+                    <td colspan="8" class="empty-msg">거래 내역이 없습니다</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -117,7 +137,120 @@
 
 {% block scripts %}
 <script>
-    // 카테고리 변경
+    // 선택된 거래 ID 관리
+    let selectedIds = new Set();
+
+    // 체크박스 클릭
+    document.querySelectorAll('.row-checkbox:not(.select-all-checkbox)').forEach(checkbox => {
+        checkbox.addEventListener('click', () => {
+            const txId = checkbox.dataset.txId;
+            const row = checkbox.closest('tr');
+
+            if (checkbox.classList.contains('checked')) {
+                checkbox.classList.remove('checked');
+                row.classList.remove('selected');
+                selectedIds.delete(txId);
+            } else {
+                checkbox.classList.add('checked');
+                row.classList.add('selected');
+                selectedIds.add(txId);
+            }
+            updateBulkActionBar();
+        });
+    });
+
+    // 전체 선택
+    document.getElementById('selectAllCheckbox')?.addEventListener('click', function () {
+        const allCheckboxes = document.querySelectorAll('.row-checkbox:not(.select-all-checkbox)');
+        const isChecked = this.classList.contains('checked');
+
+        if (isChecked) {
+            this.classList.remove('checked');
+            allCheckboxes.forEach(cb => {
+                cb.classList.remove('checked');
+                cb.closest('tr').classList.remove('selected');
+            });
+            selectedIds.clear();
+        } else {
+            this.classList.add('checked');
+            allCheckboxes.forEach(cb => {
+                cb.classList.add('checked');
+                cb.closest('tr').classList.add('selected');
+                selectedIds.add(cb.dataset.txId);
+            });
+        }
+        updateBulkActionBar();
+    });
+
+    // 일괄 작업 바 업데이트
+    function updateBulkActionBar() {
+        const bar = document.getElementById('bulkActionBar');
+        const countSpan = document.getElementById('selectedCount');
+        countSpan.textContent = selectedIds.size;
+
+        if (selectedIds.size > 0) {
+            bar.classList.add('visible');
+        } else {
+            bar.classList.remove('visible');
+        }
+    }
+
+    // 선택 해제
+    document.getElementById('clearSelectionBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.row-checkbox').forEach(cb => {
+            cb.classList.remove('checked');
+        });
+        document.querySelectorAll('tr.selected').forEach(row => {
+            row.classList.remove('selected');
+        });
+        selectedIds.clear();
+        updateBulkActionBar();
+    });
+
+    // 일괄 카테고리 변경
+    document.getElementById('bulkCategoryBtn')?.addEventListener('click', async () => {
+        const categoryId = document.getElementById('bulkCategorySelect').value;
+        if (!categoryId) {
+            showToast('카테고리를 선택하세요', 'error');
+            return;
+        }
+        if (selectedIds.size === 0) return;
+
+        const res = await fetch('/api/transactions/bulk/category', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transaction_ids: Array.from(selectedIds).map(id => parseInt(id)),
+                category_id: parseInt(categoryId)
+            })
+        });
+
+        if (res.ok) {
+            showToast(`${selectedIds.size}건의 카테고리가 변경되었습니다`);
+            location.reload();
+        }
+    });
+
+    // 일괄 삭제
+    document.getElementById('bulkDeleteBtn')?.addEventListener('click', async () => {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`${selectedIds.size}건의 거래를 삭제하시겠습니까?`)) return;
+
+        const res = await fetch('/api/transactions/bulk', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transaction_ids: Array.from(selectedIds).map(id => parseInt(id))
+            })
+        });
+
+        if (res.ok) {
+            showToast(`${selectedIds.size}건이 삭제되었습니다`);
+            location.reload();
+        }
+    });
+
+    // 개별 카테고리 변경
     document.querySelectorAll('.category-select').forEach(select => {
         select.addEventListener('change', async (e) => {
             const txId = e.target.dataset.txId;
@@ -137,7 +270,7 @@
         });
     });
 
-    // 메모 저장 (blur 시)
+    // 메모 저장
     document.querySelectorAll('.memo-input').forEach(input => {
         input.addEventListener('blur', async (e) => {
             const txId = e.target.dataset.txId;
@@ -191,7 +324,7 @@
         });
     });
 
-    // 거래 삭제
+    // 개별 거래 삭제
     document.querySelectorAll('.btn-delete').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             if (!confirm('이 거래를 삭제하시겠습니까?')) return;

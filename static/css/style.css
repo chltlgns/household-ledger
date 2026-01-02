@@ -4,11 +4,14 @@
  */
 
 /* ============ CSS Variables ============ */
-:root {
+/* Navy Theme (Default) */
+:root,
+[data-theme="navy"] {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-card: #1e293b;
     --bg-hover: #334155;
+    --bg-selected: #1e3a5f;
 
     --text-primary: #f1f5f9;
     --text-secondary: #94a3b8;
@@ -26,6 +29,48 @@
 
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+
+    --checkbox-bg: #1e293b;
+    --checkbox-border: #475569;
+    --checkbox-checked: #6366f1;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+    --bg-primary: #000000;
+    --bg-secondary: #111111;
+    --bg-card: #1a1a1a;
+    --bg-hover: #2a2a2a;
+    --bg-selected: #1a2940;
+
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666666;
+
+    --border: #333333;
+
+    --checkbox-bg: #1a1a1a;
+    --checkbox-border: #444444;
+}
+
+/* White Theme */
+[data-theme="white"] {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f1f5f9;
+    --bg-selected: #e0e7ff;
+
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    --border: #e2e8f0;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+    --checkbox-bg: #ffffff;
+    --checkbox-border: #cbd5e1;
 }
 
 /* ============ Reset & Base ============ */
@@ -833,4 +878,430 @@ input[type="color"] {
     .reports-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ============ Auth Page ============ */
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--bg-primary);
+    padding: 2rem;
+}
+
+.auth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4rem;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+}
+
+.auth-card h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.auth-subtitle {
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    margin-bottom: 3rem;
+}
+
+.auth-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1.5rem;
+    font-size: 1rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.auth-form .form-group {
+    text-align: left;
+}
+
+.auth-form label {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 1.125rem;
+}
+
+.auth-form input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.auth-form input::placeholder {
+    color: var(--text-muted);
+}
+
+.btn-full {
+    width: 100%;
+    justify-content: center;
+    padding: 1rem;
+    font-size: 1.125rem;
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+/* ============ User Menu ============ */
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* ============ Transaction Stats ============ */
+.tx-stats {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+/* ============ Reports Comparison ============ */
+.report-section {
+    margin-bottom: 2rem;
+}
+
+.report-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.compare-period {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.chart-container {
+    min-height: 350px;
+    margin: 1.5rem 0;
+}
+
+.total-comparison {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.compare-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.compare-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.compare-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.compare-card.current .compare-value {
+    color: var(--accent);
+}
+
+.compare-card.prev .compare-value {
+    color: var(--text-secondary);
+}
+
+.compare-card.diff.increase .compare-value {
+    color: var(--danger);
+}
+
+.compare-card.diff.decrease .compare-value {
+    color: var(--success);
+}
+
+.percent {
+    font-size: 0.875rem;
+    font-weight: 400;
+}
+
+.comparison-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.comparison-item {
+    display: grid;
+    grid-template-columns: 20px 1fr 120px 100px 120px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+}
+
+.comparison-item .current {
+    text-align: right;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.comparison-item .prev {
+    text-align: right;
+    color: var(--text-muted);
+}
+
+.comparison-item .diff {
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.comparison-item .diff.increase {
+    color: var(--danger);
+}
+
+.comparison-item .diff.decrease {
+    color: var(--success);
+}
+
+@media (max-width: 768px) {
+    .total-comparison {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-item {
+        grid-template-columns: 20px 1fr 80px;
+    }
+
+    .comparison-item .diff,
+    .comparison-item .prev {
+        display: none;
+    }
+
+    .auth-card {
+        padding: 2rem;
+    }
+
+    .auth-card h1 {
+        font-size: 2rem;
+    }
+}
+
+/* ============ Checkbox Styles ============ */
+.row-checkbox {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--checkbox-border);
+    border-radius: 4px;
+    background: var(--checkbox-bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.row-checkbox:hover {
+    border-color: var(--accent);
+}
+
+.row-checkbox.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.row-checkbox.checked::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+tr.selected {
+    background: var(--bg-selected) !important;
+}
+
+.merchant-item.selected {
+    background: var(--bg-selected) !important;
+    border-radius: var(--radius-sm);
+}
+
+/* ============ Bulk Action Bar ============ */
+.bulk-action-bar {
+    display: none;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--accent);
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
+}
+
+.bulk-action-bar.visible {
+    display: flex;
+}
+
+.bulk-action-bar .selected-count {
+    color: white;
+    font-weight: 600;
+}
+
+.bulk-action-bar .btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.bulk-action-bar .btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.bulk-action-bar .btn-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+}
+
+/* ============ Theme Toggle ============ */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-right: 0.5rem;
+}
+
+.theme-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    opacity: 0.5;
+    transition: all 0.2s;
+    border-radius: 4px;
+}
+
+.theme-btn:hover {
+    opacity: 1;
+    background: var(--bg-hover);
+}
+
+.theme-btn.active {
+    opacity: 1;
+}
+
+/* ============ Select All Checkbox ============ */
+.select-all-checkbox {
+    cursor: pointer;
+}
+
+th .row-checkbox {
+    margin: 0 auto;
+}
+
+/* ============ Merchant Item with Checkbox ============ */
+.merchant-list {
+    list-style: none;
+}
+
+.merchant-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.2s;
+}
+
+.merchant-item:last-child {
+    border-bottom: none;
+}
+
+.merchant-item:hover {
+    background: var(--bg-hover);
+}
+
+.merchant-item .row-checkbox {
+    flex-shrink: 0;
+}
+
+.merchant-item .merchant-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.merchant-item .merchant-name {
+    font-weight: 500;
+}
+
+.merchant-item .merchant-meta {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.merchant-item .merchant-category-select,
+.merchant-item .merchant-actions {
+    flex-shrink: 0;
+}
+
+.merchant-item .merchant-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bulk-category-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+.category-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: white;
 }

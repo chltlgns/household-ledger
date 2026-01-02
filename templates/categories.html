@@ -41,10 +41,25 @@
     <div class="card">
         <h2>🆕 새로운 가맹점 <span class="count-badge">{{ uncategorized_merchants|length }}</span></h2>
         <p class="help-text">아래 가맹점에 카테고리를 지정하면 해당 가맹점의 모든 거래에 자동 적용됩니다.</p>
+
+        <!-- Bulk Action Bar for Uncategorized -->
+        <div class="bulk-action-bar" id="uncategorizedBulkBar">
+            <span class="selected-count"><span id="uncategorizedSelectedCount">0</span>건 선택됨</span>
+            <select id="uncategorizedBulkCategory">
+                <option value="">카테고리 일괄 적용</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn" id="uncategorizedBulkApply">적용</button>
+            <button class="btn" id="uncategorizedClearSelection">선택 해제</button>
+        </div>
+
         {% if uncategorized_merchants %}
-        <ul class="merchant-list">
+        <ul class="merchant-list" id="uncategorizedList">
             {% for m in uncategorized_merchants %}
-            <li class="merchant-item">
+            <li class="merchant-item" data-merchant="{{ m.merchant }}">
+                <div class="row-checkbox" data-merchant="{{ m.merchant }}"></div>
                 <div class="merchant-info">
                     <span class="merchant-name">{{ m.merchant }}</span>
                     <span class="merchant-meta">{{ m.business_type or '' }} · {{ m.tx_count }}건</span>
@@ -67,10 +82,26 @@
     <div class="card">
         <h2>✅ 저장된 가맹점 <span class="count-badge">{{ merchant_rules|length }}</span></h2>
         <p class="help-text">카테고리가 지정된 가맹점입니다. 새로운 거래가 추가되면 자동으로 분류됩니다.</p>
+
+        <!-- Bulk Action Bar for Saved -->
+        <div class="bulk-action-bar" id="savedBulkBar">
+            <span class="selected-count"><span id="savedSelectedCount">0</span>건 선택됨</span>
+            <select id="savedBulkCategory">
+                <option value="">카테고리 일괄 변경</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn" id="savedBulkApply">적용</button>
+            <button class="btn btn-danger" id="savedBulkDelete">규칙 삭제</button>
+            <button class="btn" id="savedClearSelection">선택 해제</button>
+        </div>
+
         {% if merchant_rules %}
-        <ul class="merchant-list saved-merchants">
+        <ul class="merchant-list saved-merchants" id="savedList">
             {% for rule in merchant_rules %}
-            <li class="merchant-item">
+            <li class="merchant-item" data-merchant="{{ rule.merchant_pattern }}">
+                <div class="row-checkbox" data-merchant="{{ rule.merchant_pattern }}"></div>
                 <div class="merchant-info">
                     <span class="merchant-name">{{ rule.merchant_pattern }}</span>
                     <span class="category-badge" style="background: {{ rule.category_color }}">{{ rule.category_name
@@ -98,6 +129,130 @@
 
 {% block scripts %}
 <script>
+    // 선택된 가맹점 관리
+    let uncategorizedSelected = new Set();
+    let savedSelected = new Set();
+
+    // 체크박스 기능 - 미분류 가맹점
+    document.querySelectorAll('#uncategorizedList .row-checkbox').forEach(cb => {
+        cb.addEventListener('click', () => {
+            const merchant = cb.dataset.merchant;
+            const item = cb.closest('.merchant-item');
+
+            if (cb.classList.contains('checked')) {
+                cb.classList.remove('checked');
+                item.classList.remove('selected');
+                uncategorizedSelected.delete(merchant);
+            } else {
+                cb.classList.add('checked');
+                item.classList.add('selected');
+                uncategorizedSelected.add(merchant);
+            }
+            updateBulkBar('uncategorized', uncategorizedSelected);
+        });
+    });
+
+    // 체크박스 기능 - 저장된 가맹점
+    document.querySelectorAll('#savedList .row-checkbox').forEach(cb => {
+        cb.addEventListener('click', () => {
+            const merchant = cb.dataset.merchant;
+            const item = cb.closest('.merchant-item');
+
+            if (cb.classList.contains('checked')) {
+                cb.classList.remove('checked');
+                item.classList.remove('selected');
+                savedSelected.delete(merchant);
+            } else {
+                cb.classList.add('checked');
+                item.classList.add('selected');
+                savedSelected.add(merchant);
+            }
+            updateBulkBar('saved', savedSelected);
+        });
+    });
+
+    function updateBulkBar(type, selectedSet) {
+        const bar = document.getElementById(type + 'BulkBar');
+        const count = document.getElementById(type + 'SelectedCount');
+        count.textContent = selectedSet.size;
+        bar.classList.toggle('visible', selectedSet.size > 0);
+    }
+
+    // 선택 해제
+    document.getElementById('uncategorizedClearSelection')?.addEventListener('click', () => {
+        document.querySelectorAll('#uncategorizedList .row-checkbox').forEach(cb => {
+            cb.classList.remove('checked');
+            cb.closest('.merchant-item').classList.remove('selected');
+        });
+        uncategorizedSelected.clear();
+        updateBulkBar('uncategorized', uncategorizedSelected);
+    });
+
+    document.getElementById('savedClearSelection')?.addEventListener('click', () => {
+        document.querySelectorAll('#savedList .row-checkbox').forEach(cb => {
+            cb.classList.remove('checked');
+            cb.closest('.merchant-item').classList.remove('selected');
+        });
+        savedSelected.clear();
+        updateBulkBar('saved', savedSelected);
+    });
+
+    // 일괄 카테고리 적용 (미분류)
+    document.getElementById('uncategorizedBulkApply')?.addEventListener('click', async () => {
+        const categoryId = document.getElementById('uncategorizedBulkCategory').value;
+        if (!categoryId) {
+            showToast('카테고리를 선택하세요', 'error');
+            return;
+        }
+        if (uncategorizedSelected.size === 0) return;
+
+        for (const merchant of uncategorizedSelected) {
+            await fetch('/api/merchants/rule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant, category_id: parseInt(categoryId) })
+            });
+        }
+        showToast(`${uncategorizedSelected.size}개 가맹점에 카테고리가 적용되었습니다`);
+        location.reload();
+    });
+
+    // 일괄 카테고리 변경 (저장된)
+    document.getElementById('savedBulkApply')?.addEventListener('click', async () => {
+        const categoryId = document.getElementById('savedBulkCategory').value;
+        if (!categoryId) {
+            showToast('카테고리를 선택하세요', 'error');
+            return;
+        }
+        if (savedSelected.size === 0) return;
+
+        for (const merchant of savedSelected) {
+            await fetch('/api/merchants/rule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant, category_id: parseInt(categoryId) })
+            });
+        }
+        showToast(`${savedSelected.size}개 가맹점의 카테고리가 변경되었습니다`);
+        location.reload();
+    });
+
+    // 일괄 규칙 삭제
+    document.getElementById('savedBulkDelete')?.addEventListener('click', async () => {
+        if (savedSelected.size === 0) return;
+        if (!confirm(`${savedSelected.size}개의 분류 규칙을 삭제하시겠습니까?`)) return;
+
+        for (const merchant of savedSelected) {
+            await fetch('/api/merchants/rule', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ merchant })
+            });
+        }
+        showToast(`${savedSelected.size}개의 규칙이 삭제되었습니다`);
+        location.reload();
+    });
+
     // 카테고리 추가
     document.getElementById('addCategoryForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -167,7 +322,7 @@
         });
     });
 
-    // 가맹점 카테고리 지정 (새로운 가맹점)
+    // 가맹점 카테고리 지정 (새로운 가맹점 - 개별)
     document.querySelectorAll('.merchant-category-select:not(.saved)').forEach(select => {
         select.addEventListener('change', async (e) => {
             const merchant = e.target.dataset.merchant;
@@ -192,7 +347,7 @@
         });
     });
 
-    // 저장된 가맹점 카테고리 변경
+    // 저장된 가맹점 카테고리 변경 (개별)
     document.querySelectorAll('.merchant-category-select.saved').forEach(select => {
         select.addEventListener('change', async (e) => {
             const merchant = e.target.dataset.merchant;
@@ -212,7 +367,7 @@
         });
     });
 
-    // 가맹점 규칙 제거
+    // 가맹점 규칙 제거 (개별)
     document.querySelectorAll('.btn-remove-rule').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const merchant = e.target.dataset.merchant;

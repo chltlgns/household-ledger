@@ -339,6 +339,39 @@ def delete_tx(tx_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/transactions/bulk/category', methods=['PUT'])
+@login_required
+def bulk_update_category():
+    """일괄 카테고리 변경"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+    category_id = data.get('category_id')
+    
+    if not transaction_ids:
+        return jsonify({'error': '거래를 선택하세요'}), 400
+    
+    for tx_id in transaction_ids:
+        db.update_transaction_category(tx_id, category_id)
+    
+    return jsonify({'success': True, 'count': len(transaction_ids)})
+
+
+@app.route('/api/transactions/bulk', methods=['DELETE'])
+@login_required
+def bulk_delete_transactions():
+    """일괄 거래 삭제"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+    
+    if not transaction_ids:
+        return jsonify({'error': '거래를 선택하세요'}), 400
+    
+    for tx_id in transaction_ids:
+        db.delete_transaction(tx_id)
+    
+    return jsonify({'success': True, 'count': len(transaction_ids)})
+
+
 # ============ 태그 API ============
 
 @app.route('/api/tags')
