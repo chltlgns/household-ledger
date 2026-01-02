@@ -1,6 +1,6 @@
 """
 가계부 앱 런처
-시작 시 브라우저 자동으로 카테고리 페이지 열기
+시작 시 브라우저 자동으로 열기
 """
 import webbrowser
 import threading
@@ -27,20 +27,22 @@ FLASK_HOST = os.getenv('FLASK_HOST', '127.0.0.1')
 FLASK_PORT = int(os.getenv('FLASK_PORT', '5000'))
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
 
-# 데이터베이스 모듈 임포트 및 경로 설정
-import database as db
-db.DB_PATH = os.path.join(base_path, 'data.db')
+# 인증 DB 초기화
+from auth import set_auth_db_path, init_auth_db
+set_auth_db_path(base_path)
+init_auth_db()
 
-# 데이터베이스 초기화 (테이블 생성)
-db.init_db()
+# app 모듈에 BASE_PATH 설정
+import app as flask_app
+flask_app.BASE_PATH = base_path
 
-# Flask 앱 임포트
+# Flask 앱 가져오기
 from app import app
 
 def open_browser():
     """서버 시작 후 브라우저 열기"""
     time.sleep(1.5)  # 서버 시작 대기
-    webbrowser.open(f'http://{FLASK_HOST}:{FLASK_PORT}/categories')
+    webbrowser.open(f'http://{FLASK_HOST}:{FLASK_PORT}/')
 
 if __name__ == '__main__':
     # 브라우저 열기 스레드 시작
@@ -48,4 +50,5 @@ if __name__ == '__main__':
     
     # Flask 서버 시작
     app.run(debug=FLASK_DEBUG, host=FLASK_HOST, port=FLASK_PORT, use_reloader=False)
+
 

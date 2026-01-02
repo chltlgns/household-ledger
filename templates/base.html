@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,27 +9,39 @@
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <nav class="navbar">
         <div class="nav-brand">
             <a href="{{ url_for('index') }}">💳 가계부</a>
         </div>
         <ul class="nav-menu">
-            <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">대시보드</a></li>
-            <li><a href="{{ url_for('transactions') }}" class="{% if request.endpoint == 'transactions' %}active{% endif %}">거래내역</a></li>
-            <li><a href="{{ url_for('categories_page') }}" class="{% if request.endpoint == 'categories_page' %}active{% endif %}">카테고리</a></li>
-            <li><a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">리포트</a></li>
+            <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">대시보드</a>
+            </li>
+            <li><a href="{{ url_for('transactions') }}"
+                    class="{% if request.endpoint == 'transactions' %}active{% endif %}">거래내역</a></li>
+            <li><a href="{{ url_for('categories_page') }}"
+                    class="{% if request.endpoint == 'categories_page' %}active{% endif %}">카테고리</a></li>
+            <li><a href="{{ url_for('reports') }}"
+                    class="{% if request.endpoint == 'reports' %}active{% endif %}">리포트</a></li>
             <li><a href="{{ url_for('upload') }}" class="btn-upload">📂 업로드</a></li>
         </ul>
+        {% if current_user.is_authenticated %}
+        <div class="user-menu">
+            <span class="user-name">👤 {{ current_user.username }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm">로그아웃</a>
+        </div>
+        {% endif %}
     </nav>
-    
+
     <main class="container">
         {% block content %}{% endblock %}
     </main>
-    
+
     <div id="toast" class="toast"></div>
-    
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
+
 </html>

@@ -5,12 +5,15 @@
 <div class="transactions-page">
     <header class="page-header">
         <h1>📋 거래 내역</h1>
-        {% if current_year and current_month %}
-        <div class="tx-count-badge">{{ current_year }}년 {{ current_month }}월 거래: <strong>{{ transactions|length
-                }}건</strong></div>
-        {% else %}
-        <div class="tx-count-badge">전체 거래: <strong>{{ transactions|length }}건</strong></div>
-        {% endif %}
+        <div class="tx-stats">
+            <div class="tx-count-badge">총 금액: <strong>₩{{ "{:,}".format(total_amount) }}</strong></div>
+            {% if current_year and current_month %}
+            <div class="tx-count-badge">{{ current_year }}년 {{ current_month }}월 거래: <strong>{{ transactions|length
+                    }}건</strong></div>
+            {% else %}
+            <div class="tx-count-badge">전체 거래: <strong>{{ transactions|length }}건</strong></div>
+            {% endif %}
+        </div>
     </header>
 
     <div class="filters card">
@@ -55,11 +58,10 @@
                 <tr>
                     <th class="sortable" data-sort="date">날짜 ⇅</th>
                     <th class="sortable" data-sort="merchant">가맹점 ⇅</th>
-                    <th>업종</th>
                     <th class="sortable" data-sort="amount">금액 ⇅</th>
-                    <th>카테고리</th>
-                    <th>메모</th>
-                    <th>태그</th>
+                    <th class="sortable" data-sort="category">카테고리 ⇅</th>
+                    <th class="sortable" data-sort="memo">메모 ⇅</th>
+                    <th class="sortable" data-sort="tags">태그 ⇅</th>
                     <th></th>
                 </tr>
             </thead>
@@ -71,8 +73,8 @@
                         {{ tx.merchant }}
                         {% if tx.is_overseas %}<span class="badge overseas">해외</span>{% endif %}
                     </td>
-                    <td class="business-type">{{ tx.business_type or '-' }}</td>
-                    <td class="amount">₩{{ "{:,}".format(tx.billed_amount) }}</td>
+                    <td class="amount {% if tx.billed_amount < 0 %}negative{% endif %}">₩{{
+                        "{:,}".format(tx.billed_amount) }}</td>
                     <td class="category">
                         <select class="category-select" data-tx-id="{{ tx.id }}" data-merchant="{{ tx.merchant }}">
                             <option value="">미분류</option>
@@ -104,7 +106,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" class="empty-msg">거래 내역이 없습니다</td>
+                    <td colspan="7" class="empty-msg">거래 내역이 없습니다</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -211,7 +213,6 @@
             const tbody = table.querySelector('tbody');
             const rows = Array.from(tbody.querySelectorAll('tr'));
 
-            // 정렬 순서 토글
             sortOrder[sortKey] = !sortOrder[sortKey];
             const ascending = sortOrder[sortKey];
 
@@ -225,9 +226,18 @@
                     aVal = a.querySelector('.merchant')?.textContent?.trim() || '';
                     bVal = b.querySelector('.merchant')?.textContent?.trim() || '';
                 } else if (sortKey === 'amount') {
-                    aVal = parseInt(a.querySelector('.amount')?.textContent?.replace(/[^\d]/g, '') || 0);
-                    bVal = parseInt(b.querySelector('.amount')?.textContent?.replace(/[^\d]/g, '') || 0);
+                    aVal = parseInt(a.querySelector('.amount')?.textContent?.replace(/[^\d-]/g, '') || 0);
+                    bVal = parseInt(b.querySelector('.amount')?.textContent?.replace(/[^\d-]/g, '') || 0);
                     return ascending ? aVal - bVal : bVal - aVal;
+                } else if (sortKey === 'category') {
+                    aVal = a.querySelector('.category-select')?.selectedOptions[0]?.text || '';
+                    bVal = b.querySelector('.category-select')?.selectedOptions[0]?.text || '';
+                } else if (sortKey === 'memo') {
+                    aVal = a.querySelector('.memo-input')?.value || '';
+                    bVal = b.querySelector('.memo-input')?.value || '';
+                } else if (sortKey === 'tags') {
+                    aVal = a.querySelector('.tag-list')?.textContent?.trim() || '';
+                    bVal = b.querySelector('.tag-list')?.textContent?.trim() || '';
                 }
 
                 return ascending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);

@@ -1,47 +1,121 @@
 """
 카드 명세서 분석 프로그램
-Flask 메인 애플리케이션
+Flask 메인 애플리케이션 (로그인 시스템 포함)
 """
 import os
+import secrets
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, g
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import database as db
 import parser as excel_parser
+from auth import User, init_auth_db, set_auth_db_path, get_user_db_path
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
-app.config['UPLOAD_FOLDER'] = Path(__file__).parent / 'uploads'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
+
+# 기본 경로 설정
+BASE_PATH = Path(__file__).parent
 
 # 업로드 폴더 생성
+app.config['UPLOAD_FOLDER'] = BASE_PATH / 'uploads'
 app.config['UPLOAD_FOLDER'].mkdir(exist_ok=True)
 
+# Flask-Login 설정
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(int(user_id))
+
+
+@app.before_request
+def before_request():
+    """요청 전 사용자별 DB 경로 설정"""
+    if current_user.is_authenticated:
+        user_db_path = get_user_db_path(str(BASE_PATH), current_user.id)
+        db.DB_PATH = user_db_path
+        # 테이블 초기화 확인
+        if not os.path.exists(user_db_path):
+            db.init_db()
+
+
+# ============ 인증 라우트 ============
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """로그인/회원가입 페이지"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    error = None
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        action = request.form.get('action')
+        
+        if not username or not password:
+            error = '사용자명과 비밀번호를 입력하세요'
+        elif action == 'register':
+            # 회원가입
+            if len(password) < 4:
+                error = '비밀번호는 4자 이상이어야 합니다'
+            else:
+                user_id = User.create(username, password)
+                if user_id:
+                    user = User.get(user_id)
+                    login_user(user)
+                    # 새 사용자 DB 초기화
+                    user_db_path = get_user_db_path(str(BASE_PATH), user_id)
+                    db.DB_PATH = user_db_path
+                    db.init_db()
+                    return redirect(url_for('index'))
+                else:
+                    error = '이미 존재하는 사용자명입니다'
+        else:
+            # 로그인
+            user_data = User.get_by_username(username)
+            if user_data and User.verify_password(user_data['password_hash'], password):
+                user = User(user_data['id'], user_data['username'])
+                login_user(user)
+                return redirect(url_for('index'))
+            else:
+                error = '사용자명 또는 비밀번호가 올바르지 않습니다'
+    
+    return render_template('login.html', error=error)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """로그아웃"""
+    logout_user()
+    return redirect(url_for('login'))
+
+
+# ============ 대시보드 ============
 
 @app.route('/')
+@login_required
 def index():
     """대시보드 - 기간 선택 지원"""
-    # 현재 연/월
     now = datetime.now()
     
-    # 시작/종료 연월 파라미터 (기본값: 현재 월)
     start_year = request.args.get('start_year', now.year, type=int)
     start_month = request.args.get('start_month', now.month, type=int)
     end_year = request.args.get('end_year', now.year, type=int)
     end_month = request.args.get('end_month', now.month, type=int)
     
-    # 기간별 요약
     summary = db.get_summary_by_date_range(start_year, start_month, end_year, end_month)
-    
-    # 총 지출
     total = sum(s['total'] or 0 for s in summary)
-    
-    # 최근 거래 (기간 내)
     recent_txs = db.get_transactions_by_date_range(start_year, start_month, end_year, end_month)[:10]
-    
-    # 카테고리 목록
     categories = db.get_categories()
-    
-    # 연도 목록 (2025년부터 현재년까지)
     years = list(range(2025, now.year + 1))
     
     return render_template('index.html',
@@ -53,11 +127,15 @@ def index():
         total=total,
         recent_txs=recent_txs,
         categories=categories,
-        years=years
+        years=years,
+        username=current_user.username
     )
 
 
+# ============ 거래 내역 ============
+
 @app.route('/transactions')
+@login_required
 def transactions():
     """거래 내역 페이지"""
     year = request.args.get('year', type=int)
@@ -82,9 +160,11 @@ def transactions():
     categories = db.get_categories()
     tags = db.get_tags()
     
-    # 연도/월 목록 생성
     all_txs = db.get_transactions()
     years = sorted(set(int(t['date'][:4]) for t in all_txs if t['date']), reverse=True)
+    
+    # 전체 금액 합계
+    total_amount = sum(tx['billed_amount'] or 0 for tx in txs)
     
     return render_template('transactions.html',
         transactions=txs,
@@ -95,11 +175,15 @@ def transactions():
         current_month=month,
         current_category=category_id,
         current_tag=tag_id,
-        search=search
+        search=search,
+        total_amount=total_amount
     )
 
 
+# ============ 파일 업로드 ============
+
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload():
     """파일 업로드"""
     if request.method == 'POST':
@@ -110,13 +194,11 @@ def upload():
         if file.filename == '':
             return jsonify({'error': '파일이 선택되지 않았습니다'}), 400
         
-        # 파일 저장
         filename = file.filename
         file_path = app.config['UPLOAD_FOLDER'] / filename
         file.save(file_path)
         
         try:
-            # 파싱 및 DB 저장
             count = excel_parser.import_file(file_path)
             return jsonify({
                 'success': True,
@@ -124,10 +206,6 @@ def upload():
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-        finally:
-            # 업로드된 파일 삭제 (선택적)
-            # file_path.unlink(missing_ok=True)
-            pass
     
     return render_template('upload.html')
 
@@ -135,6 +213,7 @@ def upload():
 # ============ 카테고리 API ============
 
 @app.route('/categories')
+@login_required
 def categories_page():
     """카테고리 관리 페이지"""
     categories = db.get_categories()
@@ -148,6 +227,7 @@ def categories_page():
 
 
 @app.route('/api/categories', methods=['GET', 'POST'])
+@login_required
 def api_categories():
     """카테고리 API"""
     if request.method == 'POST':
@@ -167,6 +247,7 @@ def api_categories():
 
 
 @app.route('/api/categories/<int:cat_id>', methods=['PUT', 'DELETE'])
+@login_required
 def api_category_detail(cat_id):
     """단일 카테고리 수정/삭제"""
     if request.method == 'PUT':
@@ -180,6 +261,7 @@ def api_category_detail(cat_id):
 
 
 @app.route('/api/merchants/rule', methods=['POST', 'DELETE'])
+@login_required
 def api_merchant_rule():
     """가맹점 분류 규칙 API"""
     data = request.get_json()
@@ -190,7 +272,6 @@ def api_merchant_rule():
         if not merchant or not category_id:
             return jsonify({'error': '가맹점과 카테고리를 선택하세요'}), 400
         
-        # 규칙 저장 및 기존 거래에 일괄 적용
         affected = db.apply_category_to_all_transactions_by_merchant(merchant, category_id)
         return jsonify({'success': True, 'affected': affected})
     
@@ -204,6 +285,7 @@ def api_merchant_rule():
 # ============ 거래 API ============
 
 @app.route('/api/transactions/<int:tx_id>/category', methods=['PUT'])
+@login_required
 def update_tx_category(tx_id):
     """거래 카테고리 수정"""
     data = request.get_json()
@@ -211,7 +293,6 @@ def update_tx_category(tx_id):
     
     db.update_transaction_category(tx_id, category_id)
     
-    # 가맹점 규칙 저장 (체크박스 선택 시)
     if data.get('save_rule') and data.get('merchant'):
         db.set_merchant_category_rule(data['merchant'], category_id)
     
@@ -219,6 +300,7 @@ def update_tx_category(tx_id):
 
 
 @app.route('/api/transactions/<int:tx_id>/memo', methods=['PUT'])
+@login_required
 def update_tx_memo(tx_id):
     """거래 메모 수정"""
     data = request.get_json()
@@ -228,6 +310,7 @@ def update_tx_memo(tx_id):
 
 
 @app.route('/api/transactions/<int:tx_id>/tags', methods=['POST', 'DELETE'])
+@login_required
 def manage_tx_tags(tx_id):
     """거래 태그 관리"""
     data = request.get_json()
@@ -235,7 +318,6 @@ def manage_tx_tags(tx_id):
     if request.method == 'POST':
         tag_name = data.get('name', '').strip()
         if tag_name:
-            # 태그 생성 또는 기존 태그 ID 반환
             tag_id = db.create_tag(tag_name)
             if tag_id:
                 db.add_tag_to_transaction(tx_id, tag_id)
@@ -250,6 +332,7 @@ def manage_tx_tags(tx_id):
 
 
 @app.route('/api/transactions/<int:tx_id>', methods=['DELETE'])
+@login_required
 def delete_tx(tx_id):
     """거래 삭제"""
     db.delete_transaction(tx_id)
@@ -259,12 +342,14 @@ def delete_tx(tx_id):
 # ============ 태그 API ============
 
 @app.route('/api/tags')
+@login_required
 def api_tags():
     """모든 태그 조회"""
     return jsonify(db.get_tags())
 
 
 @app.route('/api/tags/autocomplete')
+@login_required
 def api_tags_autocomplete():
     """태그 자동완성"""
     query = request.args.get('q', '')
@@ -275,37 +360,63 @@ def api_tags_autocomplete():
 # ============ 리포트 ============
 
 @app.route('/reports')
+@login_required
 def reports():
     """분석 리포트 페이지"""
     now = datetime.now()
     year = request.args.get('year', now.year, type=int)
-    month = request.args.get('month', type=int)
+    month = request.args.get('month', now.month, type=int)
     
-    # 월별 요약 (카테고리별)
-    if month:
-        category_summary = db.get_monthly_summary(year, month)
+    # 이번달 카테고리별 요약
+    current_summary = db.get_monthly_summary(year, month)
+    current_total = sum(s['total'] or 0 for s in current_summary)
+    
+    # 전달 계산
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
     else:
-        # 연간 전체
-        category_summary = []
-        for m in range(1, 13):
-            monthly = db.get_monthly_summary(year, m)
-            # 합산
-            for ms in monthly:
-                found = False
-                for cs in category_summary:
-                    if cs['id'] == ms['id']:
-                        cs['count'] = (cs.get('count') or 0) + (ms.get('count') or 0)
-                        cs['total'] = (cs.get('total') or 0) + (ms.get('total') or 0)
-                        found = True
-                        break
-                if not found:
-                    category_summary.append(dict(ms))
+        prev_year, prev_month = year, month - 1
+    
+    # 전달 카테고리별 요약
+    prev_summary = db.get_monthly_summary(prev_year, prev_month)
+    prev_total = sum(s['total'] or 0 for s in prev_summary)
+    
+    # 비교 데이터 생성
+    comparison_data = []
+    all_categories = {}
+    
+    for s in current_summary:
+        cat_id = s['id']
+        all_categories[cat_id] = {
+            'id': cat_id,
+            'name': s['name'] or '미분류',
+            'color': s['color'] or '#64748b',
+            'current': s['total'] or 0,
+            'prev': 0
+        }
+    
+    for s in prev_summary:
+        cat_id = s['id']
+        if cat_id in all_categories:
+            all_categories[cat_id]['prev'] = s['total'] or 0
+        else:
+            all_categories[cat_id] = {
+                'id': cat_id,
+                'name': s['name'] or '미분류',
+                'color': s['color'] or '#64748b',
+                'current': 0,
+                'prev': s['total'] or 0
+            }
+    
+    comparison_data = list(all_categories.values())
+    comparison_data.sort(key=lambda x: x['current'], reverse=True)
+    
+    # 총 지출 비교
+    total_diff = current_total - prev_total
+    total_diff_percent = ((current_total - prev_total) / prev_total * 100) if prev_total > 0 else 0
     
     # 연간 월별 추이
     yearly = db.get_yearly_summary(year)
-    
-    # 태그별 요약
-    tag_summary = db.get_tag_summary(year, month)
     
     # 연도 목록
     all_txs = db.get_transactions()
@@ -316,14 +427,21 @@ def reports():
     return render_template('reports.html',
         year=year,
         month=month,
-        category_summary=category_summary,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        category_summary=current_summary,
+        comparison_data=comparison_data,
+        current_total=current_total,
+        prev_total=prev_total,
+        total_diff=total_diff,
+        total_diff_percent=total_diff_percent,
         yearly=yearly,
-        tag_summary=tag_summary,
         years=years
     )
 
 
 @app.route('/api/reports/monthly')
+@login_required
 def api_monthly_report():
     """월별 리포트 API"""
     year = request.args.get('year', datetime.now().year, type=int)
@@ -334,6 +452,7 @@ def api_monthly_report():
 
 
 @app.route('/api/reports/yearly')
+@login_required
 def api_yearly_report():
     """연간 리포트 API"""
     year = request.args.get('year', datetime.now().year, type=int)
@@ -343,7 +462,6 @@ def api_yearly_report():
 
 
 if __name__ == '__main__':
-    # 데이터베이스 초기화
     db.init_db()
     
     print("=" * 50)

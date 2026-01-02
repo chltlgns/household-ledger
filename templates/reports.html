@@ -12,7 +12,6 @@
                 {% endfor %}
             </select>
             <select id="monthSelect" onchange="updateReport()">
-                <option value="">전체</option>
                 {% for m in range(1, 13) %}
                 <option value="{{ m }}" {% if m==month %}selected{% endif %}>{{ m }}월</option>
                 {% endfor %}
@@ -20,53 +19,83 @@
         </div>
     </header>
 
-    <div class="reports-grid">
-        <section class="card">
-            <h2>카테고리별 지출</h2>
-            <div id="categoryChart"></div>
-            <div class="summary-list">
-                {% for s in category_summary %}
-                <div class="summary-item">
-                    <span class="color-dot" style="background: {{ s.color or '#64748b' }}"></span>
-                    <span class="name">{{ s.name or '미분류' }}</span>
-                    <span class="count">{{ s.count or 0 }}건</span>
-                    <span class="total">₩{{ "{:,}".format(s.total or 0) }}</span>
-                </div>
-                {% else %}
-                <p class="empty-msg">데이터가 없습니다</p>
-                {% endfor %}
+    <!-- 1. 카테고리별 지출 -->
+    <section class="card report-section">
+        <h2>📊 카테고리별 지출</h2>
+        <div id="categoryChart" class="chart-container"></div>
+        <div class="summary-list">
+            {% for s in category_summary %}
+            <div class="summary-item">
+                <span class="color-dot" style="background: {{ s.color or '#64748b' }}"></span>
+                <span class="name">{{ s.name or '미분류' }}</span>
+                <span class="count">{{ s.count or 0 }}건</span>
+                <span class="total">₩{{ "{:,}".format(s.total or 0) }}</span>
             </div>
-        </section>
+            {% else %}
+            <p class="empty-msg">데이터가 없습니다</p>
+            {% endfor %}
+        </div>
+    </section>
 
-        <section class="card">
-            <h2>월별 지출 추이</h2>
-            <div id="monthlyChart"></div>
-        </section>
+    <!-- 2. 지출 비교 (이번달 vs 전달) -->
+    <section class="card report-section">
+        <h2>📉 지출 비교 <span class="compare-period">{{ year }}년 {{ month }}월 vs {{ prev_year }}년 {{ prev_month }}월</span>
+        </h2>
 
-        <section class="card">
-            <h2>태그별 지출</h2>
-            <div id="tagChart"></div>
-            <div class="summary-list">
-                {% for t in tag_summary %}
-                <div class="summary-item">
-                    <span class="tag-badge" style="background: {{ t.color }}">#{{ t.name }}</span>
-                    <span class="count">{{ t.count }}건</span>
-                    <span class="total">₩{{ "{:,}".format(t.total or 0) }}</span>
-                </div>
-                {% else %}
-                <p class="empty-msg">태그가 없습니다</p>
-                {% endfor %}
+        <!-- 총 지출 비교 -->
+        <div class="total-comparison">
+            <div class="compare-card current">
+                <div class="compare-label">이번달</div>
+                <div class="compare-value">₩{{ "{:,}".format(current_total) }}</div>
             </div>
-        </section>
-    </div>
+            <div class="compare-card diff {% if total_diff > 0 %}increase{% else %}decrease{% endif %}">
+                <div class="compare-label">차이</div>
+                <div class="compare-value">
+                    {% if total_diff > 0 %}+{% endif %}₩{{ "{:,}".format(total_diff) }}
+                    <span class="percent">({% if total_diff_percent > 0 %}+{% endif %}{{
+                        "%.1f"|format(total_diff_percent) }}%)</span>
+                </div>
+            </div>
+            <div class="compare-card prev">
+                <div class="compare-label">전달</div>
+                <div class="compare-value">₩{{ "{:,}".format(prev_total) }}</div>
+            </div>
+        </div>
+
+        <!-- 카테고리별 비교 차트 -->
+        <div id="comparisonChart" class="chart-container"></div>
+
+        <!-- 카테고리별 비교 리스트 -->
+        <div class="comparison-list">
+            {% for item in comparison_data %}
+            <div class="comparison-item">
+                <span class="color-dot" style="background: {{ item.color }}"></span>
+                <span class="name">{{ item.name }}</span>
+                <span class="current">₩{{ "{:,}".format(item.current) }}</span>
+                <span class="diff {% if item.current - item.prev > 0 %}increase{% else %}decrease{% endif %}">
+                    {% if item.current - item.prev > 0 %}▲{% elif item.current - item.prev < 0 %}▼{% else %}-{% endif %}
+                        ₩{{ "{:,}" .format((item.current - item.prev)|abs) }} </span>
+                        <span class="prev">₩{{ "{:,}".format(item.prev) }}</span>
+            </div>
+            {% else %}
+            <p class="empty-msg">비교 데이터가 없습니다</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- 3. 월별 지출 추이 -->
+    <section class="card report-section">
+        <h2>📈 월별 지출 추이 ({{ year }}년)</h2>
+        <div id="monthlyChart" class="chart-container"></div>
+    </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
     const categoryData = {{ category_summary | tojson }};
+    const comparisonData = {{ comparison_data | tojson }};
     const yearlyData = {{ yearly | tojson }};
-    const tagData = {{ tag_summary | tojson }};
 
     // 카테고리 차트
     if (categoryData.length > 0) {
@@ -86,7 +115,42 @@
             font: { color: '#e2e8f0', family: 'Pretendard, sans-serif' },
             xaxis: { showgrid: false },
             yaxis: { showgrid: true, gridcolor: '#334155' },
-            margin: { t: 30, b: 60, l: 60, r: 30 }
+            margin: { t: 30, b: 60, l: 60, r: 30 },
+            height: 350
+        }, { responsive: true });
+    }
+
+    // 비교 차트
+    if (comparisonData.length > 0) {
+        const categories = comparisonData.map(d => d.name);
+        const currentValues = comparisonData.map(d => d.current);
+        const prevValues = comparisonData.map(d => d.prev);
+
+        Plotly.newPlot('comparisonChart', [
+            {
+                name: '이번달',
+                type: 'bar',
+                x: categories,
+                y: currentValues,
+                marker: { color: '#6366f1' }
+            },
+            {
+                name: '전달',
+                type: 'bar',
+                x: categories,
+                y: prevValues,
+                marker: { color: '#64748b' }
+            }
+        ], {
+            barmode: 'group',
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { color: '#e2e8f0', family: 'Pretendard, sans-serif' },
+            xaxis: { showgrid: false },
+            yaxis: { showgrid: true, gridcolor: '#334155' },
+            legend: { orientation: 'h', y: 1.1 },
+            margin: { t: 50, b: 60, l: 60, r: 30 },
+            height: 350
         }, { responsive: true });
     }
 
@@ -110,35 +174,17 @@
             font: { color: '#e2e8f0', family: 'Pretendard, sans-serif' },
             xaxis: { showgrid: false },
             yaxis: { showgrid: true, gridcolor: '#334155' },
-            margin: { t: 30, b: 40, l: 60, r: 30 }
+            margin: { t: 30, b: 40, l: 60, r: 30 },
+            height: 350
         }, { responsive: true });
     } else {
         document.getElementById('monthlyChart').innerHTML = '<p class="empty-msg">데이터가 없습니다</p>';
     }
 
-    // 태그 차트
-    if (tagData.length > 0) {
-        Plotly.newPlot('tagChart', [{
-            type: 'pie',
-            labels: tagData.map(t => '#' + t.name),
-            values: tagData.map(t => t.total || 0),
-            marker: { colors: tagData.map(t => t.color) },
-            textinfo: 'label+percent',
-            hole: 0.5
-        }], {
-            paper_bgcolor: 'transparent',
-            font: { color: '#e2e8f0', family: 'Pretendard, sans-serif' },
-            showlegend: false,
-            margin: { t: 20, b: 20, l: 20, r: 20 }
-        }, { responsive: true });
-    }
-
     function updateReport() {
         const year = document.getElementById('yearSelect').value;
         const month = document.getElementById('monthSelect').value;
-        let url = `/reports?year=${year}`;
-        if (month) url += `&month=${month}`;
-        location.href = url;
+        location.href = `/reports?year=${year}&month=${month}`;
     }
 </script>
 {% endblock %}

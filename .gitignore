@@ -50,7 +50,6 @@ uploads/
 logs/
 
 # PyInstaller
-*.spec
 build/
 dist/
 
